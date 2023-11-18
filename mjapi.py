@@ -38,10 +38,10 @@ class _mjApi:
         id = rj['result']
         if code == 1:
             msg = "✅ 您的任务已提交\n"
-            msg += f"🚀 正在快速处理中，请稍后\n"
-            msg += f"📨 ID: {id}\n"
-            msg += f"✍️ 使用[{self.fetch_prefix[0]} + 任务ID操作]\n"
-            msg += f"✍️ {self.fetch_prefix[0]} {id}"
+            msg += f"🚀 作品预计1-5分钟完成，请耐心等待\n "
+            msg += f"📨 任务ID: {id}\n"
+            #msg += f"✍️ 使用[{self.fetch_prefix[0]} + 任务ID操作]\n"
+            #msg += f"✍️ {self.fetch_prefix[0]} {id}"
             return True, msg, rj["result"]
         else:
             return False, rj['description'], ""
@@ -220,20 +220,24 @@ class _mjApi:
                     msg += f"✨ 描述：{rj['description']}\n"
                 if rj['finishTime']:
                     msg += f"⏱ 耗时：{timeup}秒\n"
-                if action == "IMAGINE" or action == "BLEND" or action == "REROLL":
-                    msg += f"🪄 放大 U1～U4，变换 V1～V4：使用[{self.up_prefix[0]} + 任务ID]\n"
-                    msg += f"✍️ 例如：{self.up_prefix[0]} {id} U1\n"
+                #if action == "IMAGINE" or action == "BLEND" or action == "REROLL":
+                    #msg += f"🪄 放大 U1～U4，变换 V1～V4：使用[{self.up_prefix[0]} + 任务ID]\n"
+                    #msg += f"✍️ 例如：{self.up_prefix[0]} {id} U1\n"
                 if ruser and ruser["user_nickname"]:
                     msg += f"🙋‍♂️ 提交人：{ruser['user_nickname']}\n"
                 if rj['imageUrl']:
                     imageUrl = self.get_img_url(rj['imageUrl'])
-                    msg += f"🎬 图片地址: {imageUrl}\n"
+                    #msg += f"🎬 图片地址: {imageUrl}\n"
                 if rj['startTime']:
                     startTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(rj['startTime']/1000))
                     msg += f"⏱ 开始时间：{startTime}\n"
                 if rj['finishTime']:
                     finishTime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(rj['finishTime']/1000))
                     msg += f"⏱ 完成时间：{finishTime}\n"
+                if self.user:
+                    user = json.loads(self.user)
+                    print("user1={} user_json={}".format(self.user, user))
+                    msg += '🪫剩余作图次数：{}\n'.format(user["limit"] - 1)
                 msg += f"-----------------------------"
                 return True, msg, imageUrl
             elif status == "FAILURE":

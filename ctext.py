@@ -259,7 +259,8 @@ def img_to_jpeg(image_url, ddproxy = ""):
         res = requests.get(image_url, proxies=proxies, stream=True)
         idata = Image.open(io.BytesIO(res.content))
         idata = idata.convert("RGB")
-        idata.save(image, format="JPEG")
+        #idata.save(image, format="JPEG")
+        idata.save(image, format="PNG")
         return image
     except Exception as e:
         logger.error(e)

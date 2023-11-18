@@ -35,7 +35,7 @@ class MidJourney(Plugin):
             "mj_tip": True,
             "mj_admin_password": "",
             "discordapp_proxy": "",
-            "daily_limit": 3,
+            "daily_limit": 1,
             "imagine_prefix": [
                 "/i",
                 "/mj"
@@ -348,7 +348,7 @@ class MidJourney(Plugin):
             elif cmd == "mj_admin_cmd":
                 if not self.userInfo["isadmin"]:
                     return Error("[MJ] 您没有权限执行该操作，请先进行管理员认证", e_context)
-                return Info(get_help_text(self, verbose=True, isadmin=True), e_context)
+                return Info(get_help_text(self, verbose=True, admin=True), e_context)
             elif cmd == "mj_admin_password":
                 ok, result = self.authenticate(self.userInfo, args)
                 if not ok:
