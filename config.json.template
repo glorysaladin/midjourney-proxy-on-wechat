@@ -1,8 +1,8 @@
 {
-    "mj_url": "",
+    "mj_url": "http://101.43.54.135:8080",
     "mj_api_secret": "",
     "mj_tip": true,
-    "mj_admin_password": "",
+    "mj_admin_password": "12346789",
     "discordapp_proxy": "",
     "daily_limit": 3,
     "imagine_prefix": [

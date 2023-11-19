@@ -16,6 +16,7 @@ from lib.itchat.content import *
 from .mjapi import _mjApi
 from .mjcache import _imgCache
 from .ctext import *
+import datetime
 
 
 @plugins.register(
@@ -71,6 +72,7 @@ class MidJourney(Plugin):
         self.json_path = os.path.join(curdir, "config.json")
         self.roll_path = os.path.join(curdir, "user_info.pkl")
         self.user_datas_path = os.path.join(curdir, "user_datas.pkl")
+        self.card_datas_path = os.path.join(curdir, "card_datas.pkl")
         tm_path = os.path.join(curdir, "config.json.template")
 
         env = {}
@@ -137,6 +139,10 @@ class MidJourney(Plugin):
         if os.path.exists(self.user_datas_path):
             self.user_datas = read_pickle(self.user_datas_path)
 
+        self.card_datas = {}
+        if os.path.exists(self.card_datas_path):
+            self.card_datas = read_pickle(self.card_datas_path)
+
         # 目前没有设计session过期事件，这里先暂时使用过期字典
         if conf().get("expires_in_seconds"):
             self.sessions = ExpiredDict(conf().get("expires_in_seconds"))
@@ -165,11 +171,18 @@ class MidJourney(Plugin):
         msg: ChatMessage = context["msg"]
         self.sessionid = context["session_id"]
         self.userInfo = self.get_user_info(e_context)
+        logger.info('Cur User Info = {}'.format(self.userInfo))
         self.isgroup = self.userInfo["isgroup"]
 
         self.mj.set_user(json.dumps(self.userInfo))
 
-        if ContextType.TEXT == context.type and content.startswith(self.trigger_prefix):
+        if ContextType.TEXT == context.type and "$充值" in content:
+            return self.recharge(e_context)
+
+        if ContextType.TEXT == context.type and "$余额" in content:
+            return self.check_limit(e_context)
+
+        if ContextType.TEXT == context.type and content.startswith(self.trigger_prefix) :
             return self.handle_command(e_context)
 
         # 拦截非白名单黑名单群组
@@ -334,6 +347,62 @@ class MidJourney(Plugin):
                 return Text(f"✏  请再发送一张或多张图片", e_context)
             else:
                 return Text(f"✏  您已发送{length}张图片，可以发送更多图片或者发送['{self.config['end_prefix'][0]}']开始{names}操作", e_context)
+    # 额度查询
+    def check_limit(self, e_context: EventContext):
+        # 获取用户信息，进行充值
+        user_id = self.userInfo['user_id']
+        user_name = self.userInfo['user_nickname']
+        limit = self.user_datas[user_id]['mj_data']['limit']
+        if limit <= 5:
+            return Text("您当前剩余额度{}次, 请及时联系群主充值.".format(self.user_datas[user_id]['mj_data']['limit']), e_context)
+        else:
+            return Text("您当前剩余额度{}次.".format(self.user_datas[user_id]['mj_data']['limit']), e_context)
+
+    # 用户充值
+    def recharge(self, e_context: EventContext):
+        # 获取用户信息，进行充值
+        user_id = self.userInfo['user_id']
+        user_name = self.userInfo['user_nickname']
+        content = e_context['context'].content
+        pattern=r"([a-zA-Z0-9]+)"
+        keys = re.findall(pattern, content)
+        # 检验卡密是否有效
+        card_exist = False
+        card_used = False
+        key = ""
+        if len(keys) > 0:
+            key = keys[0]
+        if key in self.card_datas:
+            card_exist = True
+            if self.card_datas[key]['is_used'] == False:
+                # 次数充值
+                self.user_datas[user_id]['mj_data']['limit'] += self.card_datas[key]['limit']
+                # 设置为付费用户
+                self.user_datas[user_id]['mj_data']['is_pay_user'] = True
+                # 数据更新
+                write_pickle(self.user_datas_path, self.user_datas)
+                
+                # 设置卡的状态
+                self.card_datas[key]['is_used'] = True
+                current_time = datetime.datetime.now()
+                formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+                self.card_datas[key]['used_date'] = formatted_time
+                self.card_datas[key]['used_user_id'] = user_id
+                self.card_datas[key]['used_user_name'] = user_name
+                # 卡密数据更新
+                write_pickle(self.card_datas_path, self.card_datas)
+            else:
+                card_used=True
+        else:
+            card_exist=False
+        if not card_exist:
+            key="|".join(keys)
+            return Text("[MJ] 卡密[{}]不存在,请联系客服确认.".format(key), e_context)
+        if card_used:
+            key="|".join(keys)
+            return Text("[MJ] 卡密[{}]已被用户【{}】在【{}】充值使用,请确认.".format(key, self.card_datas[key]['used_user_name'], self.card_datas[key]['used_date']), e_context)
+        if card_exist and not card_used:
+            return Text("[MJ] 恭喜您充值成功, 当前剩余额度[ {} ]次.".format(self.user_datas[user_id]['mj_data']['limit']), e_context)
 
     # 指令处理
     def handle_command(self, e_context: EventContext):
@@ -371,13 +440,17 @@ class MidJourney(Plugin):
                     return Error("[MJ] 数量不能小于0", e_context)
                 self.config["daily_limit"] = limit
                 for index, item in self.user_datas.items():
-                    self.user_datas[index]["limit"] = limit
+                    # 非付费用户, 数量重置; 付费用户数量不变
+                    if not self.user_datas[index]["mj_data"]["is_pay_user"]:
+                        self.user_datas[index]["mj_data"]["limit"] = limit
                 write_pickle(self.user_datas_path, self.user_datas)
                 write_file(self.json_path, self.config)
                 return Info(f"[MJ] 每日使用次数已设置为{limit}次", e_context)
             elif cmd == "r_limit":
                 for index, item in self.user_datas.items():
-                    self.user_datas[index]["limit"] = self.config["daily_limit"]
+                    # 非付费用户, 数量重置; 付费用户数量不变
+                    if not self.user_datas[index]["mj_data"]["is_pay_user"]:
+                        self.user_datas[index]["mj_data"]["limit"] = self.config["daily_limit"]
                 write_pickle(self.user_datas_path, self.user_datas)
                 return Info(f"[MJ] 所有用户每日使用次数已重置为{self.config['daily_limit']}次", e_context)
             elif cmd == "set_mj_admin_password":
@@ -880,19 +953,31 @@ class MidJourney(Plugin):
             "group_id": msg.from_user_id if isgroup else "",
             "group_name": msg.from_user_nickname if isgroup else "",
         }
-        # 判断是否是新的一天
-        if uid not in self.user_datas or "mj_data" not in self.user_datas[uid] or "mj_data" not in self.user_datas[uid] or self.user_datas[uid]["mj_data"]["time"] != current_date:
+        if uid not in self.user_datas or "mj_data" not in self.user_datas[uid]:
+            # 纯新用户，数据写入
             mj_data = {
                 "limit": self.config["daily_limit"],
-                "time": current_date
+                "time": current_date,
+                "is_pay_user": False
             }
-            if uid in self.user_datas and self.user_datas[uid]["mj_data"]:
-                self.user_datas[uid]["mj_data"] = mj_data
-            else:
-                self.user_datas[uid] = {
-                    "mj_data": mj_data
-                }
+            self.user_datas[uid] = {
+                "mj_data": mj_data
+            }
             write_pickle(self.user_datas_path, self.user_datas)
+        else:
+            # 老用户， 数据更新写入
+            # 判断是否是新的一天
+            if self.user_datas[uid]["mj_data"]["time"] != current_date:
+                if not self.user_datas[uid]["mj_data"]["is_pay_user"]:
+                    mj_data = {
+                        "limit": self.config["daily_limit"],
+                        "time": current_date,
+                        "is_pay_user": False
+                    }
+                    self.user_datas[uid]["mj_data"] = mj_data
+                else:
+                    self.user_datas[uid]["mj_data"]['time'] = current_date
+                write_pickle(self.user_datas_path, self.user_datas)
         limit = self.user_datas[uid]["mj_data"]["limit"] if "mj_data" in self.user_datas[uid] and "limit" in self.user_datas[uid]["mj_data"] and self.user_datas[uid]["mj_data"]["limit"] and self.user_datas[uid]["mj_data"]["limit"] > 0 else False
         userInfo['limit'] = limit
         userInfo['isadmin'] = uid in [user["user_id"] for user in mj_admin_users]
@@ -900,6 +985,7 @@ class MidJourney(Plugin):
         userInfo['isbuser'] = uname in [user["user_nickname"] for user in busers]
         userInfo['iswgroup'] = userInfo["group_name"] in groups
         userInfo['isbgroup'] = userInfo["group_name"] in bgroups
+        userInfo['ispayuser'] = self.user_datas[uid]["mj_data"]["is_pay_user"]
         return userInfo
 
     def reroll(self, id, e_context: EventContext):
@@ -912,8 +998,11 @@ class MidJourney(Plugin):
         if status:
             if self.config["mj_tip"]:
                 send_reply(msg, e_context)
+
+            # 计数减1
             self.user_datas[userInfo['user_id']]["mj_data"]["limit"] -= 1
             write_pickle(self.user_datas_path, self.user_datas)
+            # 发送图片
             rc, rt = self.get_f_img(id, e_context, reply_type)
             return send(rc, e_context, rt)
         else:

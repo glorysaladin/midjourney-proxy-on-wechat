@@ -220,9 +220,9 @@ class _mjApi:
                     msg += f"✨ 描述：{rj['description']}\n"
                 if rj['finishTime']:
                     msg += f"⏱ 耗时：{timeup}秒\n"
-                #if action == "IMAGINE" or action == "BLEND" or action == "REROLL":
-                    #msg += f"🪄 放大 U1～U4，变换 V1～V4：使用[{self.up_prefix[0]} + 任务ID]\n"
-                    #msg += f"✍️ 例如：{self.up_prefix[0]} {id} U1\n"
+                if action == "IMAGINE" or action == "BLEND" or action == "REROLL":
+                    msg += f"🪄 放大图片U1～U4：使用[{self.up_prefix[0]} + 任务ID]\n"
+                    msg += f"✍️ 例如：{self.up_prefix[0]} {id} U1\n"
                 if ruser and ruser["user_nickname"]:
                     msg += f"🙋‍♂️ 提交人：{ruser['user_nickname']}\n"
                 if rj['imageUrl']:

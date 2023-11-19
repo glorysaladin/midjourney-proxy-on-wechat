@@ -246,7 +246,6 @@ def write_file(path, content):
         json.dump(content, f, indent=4)
     return True
 
-
 def img_to_jpeg(image_url, ddproxy = ""):
     try:
         image = io.BytesIO()
@@ -259,8 +258,8 @@ def img_to_jpeg(image_url, ddproxy = ""):
         res = requests.get(image_url, proxies=proxies, stream=True)
         idata = Image.open(io.BytesIO(res.content))
         idata = idata.convert("RGB")
-        #idata.save(image, format="JPEG")
-        idata.save(image, format="PNG")
+        idata.save(image, format="JPEG")
+        #idata.save(image, format="PNG")
         return image
     except Exception as e:
         logger.error(e)
@@ -356,8 +355,8 @@ def env_detection(self, e_context: EventContext):
     trigger_prefix = conf().get("plugin_trigger_prefix", "$")
     reply = None
     # 非管理员，非白名单用户，使用次数已用完
-    if not self.userInfo["isadmin"] and not self.userInfo["iswuser"] and not self.userInfo["limit"]:
-        reply = Reply(ReplyType.ERROR, "[MJ] 您今日的使用次数已用完，请明日再来")
+    if not self.userInfo["isadmin"] and not self.userInfo["iswuser"] and self.userInfo["limit"] <= 0:
+        reply = Reply(ReplyType.ERROR, "[MJ] 您今日的使用次数已用完，请明日再来; 或者联系群主充值.")
         e_context["reply"] = reply
         e_context.action = EventAction.BREAK_PASS
         return False
