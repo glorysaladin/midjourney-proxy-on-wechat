@@ -249,7 +249,7 @@ def write_file(path, content):
 def img_to_jpeg(image_url, ddproxy = ""):
     try:
         image = io.BytesIO()
-        proxy = conf().get("proxy", "")
+        proxy = conf().get("proxy", "http://127.0.0.1:7890") 
         proxies = {}
         if proxy:
             proxies = {"http": proxy, "https": proxy}
